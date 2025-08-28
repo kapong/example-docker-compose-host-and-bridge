@@ -1,0 +1,88 @@
+name: test
+
+services:
+  dnsgen:
+    image: kap0ng/dnsgen
+    build: dnsgen
+    restart: always
+    environment:
+      DISCOVERY_INTERVAL: 30
+      HOSTS_FILE: /shared/hosts
+    volumes:
+      - ./hosts:/shared/hosts
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    networks:
+      - default
+    depends_on:
+      - core
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+    healthcheck:
+      test: ["CMD-SHELL", "test -f /shared/hosts || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  core:
+    image: busybox
+    network_mode: host
+    restart: always
+    stdin_open: true
+    tty: true
+    volumes:
+      - ./hosts:/etc/hosts
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+    healthcheck:
+      test: ["CMD", "test", "-f", "/etc/hosts"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+
+  app:
+    image: nginx:alpine
+    restart: always
+    networks:
+      - default
+    depends_on:
+      - core
+      - db
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:80"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  db:
+    image: postgres:alpine
+    restart: always
+    environment:
+      POSTGRES_PASSWORD: password
+    networks:
+      - default
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+
+networks:
+  default:
+    name: test_default
